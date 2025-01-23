@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "recordrecord-testmod",
+  "version": "0.0.1",
+  "entrypoints": {
+    "recordrecoder:register": [
+      "recordrecoder.test.RecordRecoderTest"
+    ],
+    "main": [
+      "recordrecoder.test.RecordRecoderTestInitializer"
+    ]
+  }
+}
