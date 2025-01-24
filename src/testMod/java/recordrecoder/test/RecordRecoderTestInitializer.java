@@ -86,10 +86,6 @@ public class RecordRecoderTestInitializer implements ModInitializer {
                     RecordRecoderTest.KEY.getOrNull(null) == null,
                     "expected RecordComponentKey#getOrNull to return null when called with null"
             );
-            String s = "Hello, World!";
-            Runnable r = () -> {
-                LOGGER.info(s);
-            };
         }
     }
 

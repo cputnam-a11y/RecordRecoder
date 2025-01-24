@@ -41,16 +41,16 @@ public interface RecordComponentKey<T> {
         return new RecordComponentKeyImpl<>(fieldName, className, componentClassName, defaultValueSupplier::get);
     }
 
-    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClassName) {
-        return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClassName, () -> null);
+    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClass) {
+        return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClass, () -> null);
     }
 
-    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClassName, T defaultValue) {
-        return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClassName, () -> defaultValue);
+    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClass, T defaultValue) {
+        return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClass, () -> defaultValue);
     }
 
-    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClassName, Supplier<T> defaultValueSupplier) {
-        return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClassName, defaultValueSupplier::get);
+    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClass, Supplier<T> defaultValueSupplier) {
+        return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClass, defaultValueSupplier::get);
     }
 
     static <T, V extends Record> T get(RecordComponentKey<T> key, V instance) throws KeyMismatchException {

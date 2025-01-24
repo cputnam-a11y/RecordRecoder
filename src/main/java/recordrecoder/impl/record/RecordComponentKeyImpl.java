@@ -5,7 +5,6 @@ import com.google.common.base.Suppliers;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import recordrecoder.api.record.RecordComponentKey;
-
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.util.Objects;
@@ -26,9 +25,8 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     public RecordComponentKeyImpl(String fieldName, String targetClassName, String componentClassName, Supplier<T> defaultValueSupplier) {
         this.targetClassName = targetClassName;
         this.componentClassName = componentClassName;
-        targetClassGetter = Suppliers.memoize(createTargetClassSupplier(targetClassName));
-        componentClassGetter = Suppliers.memoize(createComponentClassSupplier(componentClassName));
-
+        this.targetClassGetter = Suppliers.memoize(createTargetClassSupplier(targetClassName));
+        this.componentClassGetter = Suppliers.memoize(createComponentClassSupplier(componentClassName));
         this.next = ThreadLocal.withInitial(defaultValueSupplier);
         this.fieldName = fieldName;
     }
@@ -36,8 +34,8 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     public RecordComponentKeyImpl(String fieldName, String targetClassName, Class<?> componentClass, Supplier<T> defaultValueSupplier) {
         this.targetClassName = targetClassName;
         this.componentClassName = toInternalName(componentClass.getName());
-        targetClassGetter = Suppliers.memoize(createTargetClassSupplier(targetClassName));
-        componentClassGetter = Suppliers.memoize(() -> componentClass);
+        this.targetClassGetter = Suppliers.memoize(createTargetClassSupplier(targetClassName));
+        this.componentClassGetter = Suppliers.memoize(() -> componentClass);
         this.next = ThreadLocal.withInitial(defaultValueSupplier);
         this.fieldName = fieldName;
     }
@@ -56,7 +54,7 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     @SuppressWarnings({"unchecked", "DataFlowIssue"})
     private <I extends Record> T getUnchecked(I instance) {
         try {
-            return (T) getter.invokeExact(instance); // I don't really like this, but Object != I, and there isn't much reflection can do to help with that
+            return (T) getter.invokeExact((Object) instance);
         } catch (Throwable throwable) {
             throw new RuntimeException(throwable);
         }
@@ -100,13 +98,12 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     @ApiStatus.Internal
     @SuppressWarnings("unused") // used in asm generated static initializers
     public void provideGetter(MethodHandle getter) {
-        this.getter = getter.asType(// currently seems the most efficient, looking into methods of acquiring constant promotion
+        this.getter = getter.asType( // currently seems the most efficient, looking into methods of acquiring constant promotion (none found that worked consistently)
                 MethodType.methodType(
                         Object.class,
                         Object.class
                 )
         );
-
     }
 
     public String getTargetClassName() {
