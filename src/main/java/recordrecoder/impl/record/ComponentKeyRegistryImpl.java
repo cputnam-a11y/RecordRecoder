@@ -10,7 +10,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
-import static recordrecoder.impl.utils.ClassNameHelper.toInternalName;
+import static recordrecoder.impl.utils.asmhelpers.ClassNameHelper.toInternalName;
 
 public class ComponentKeyRegistryImpl implements ComponentKeyRegistry {
     HashMap<String, List<RecordComponentKeyImpl<?>>> componentKeys = new HashMap<>();

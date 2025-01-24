@@ -1,4 +1,4 @@
-package recordrecoder.impl.utils;
+package recordrecoder.impl.utils.mixindefaults;
 
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;

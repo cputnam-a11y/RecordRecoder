@@ -1,7 +1,7 @@
-package recordrecoder.impl.utils;
+package recordrecoder.impl.utils.asmhelpers;
 
 public class ClassNameHelper {
-    public static String toDescName(String className) {
+    public static String toDescriptor(String className) {
         if (!className.startsWith("L"))
             className = "L" + className;
         if (!className.endsWith(";"))

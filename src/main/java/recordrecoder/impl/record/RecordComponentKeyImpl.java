@@ -8,9 +8,10 @@ import recordrecoder.api.record.RecordComponentKey;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
+import java.util.Objects;
 
-import static recordrecoder.impl.utils.ClassNameHelper.toBinaryName;
-import static recordrecoder.impl.utils.ClassNameHelper.toInternalName;
+import static recordrecoder.impl.utils.asmhelpers.ClassNameHelper.toBinaryName;
+import static recordrecoder.impl.utils.asmhelpers.ClassNameHelper.toInternalName;
 
 public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     private final String targetClassName;
@@ -43,7 +44,8 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
 
 
     @Override
-    public <I extends Record> T get(I instance) throws KeyMismatchException {
+    public <I extends Record> T get(I instance) throws KeyMismatchException, IllegalStateException {
+        Objects.requireNonNull(instance, "Instance cannot be null");
         if (!targetClassGetter.get().isAssignableFrom(instance.getClass()))
             throw new KeyMismatchException(fieldName, instance.getClass().getSimpleName());
         if (this.getter == null)
@@ -52,9 +54,9 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     }
 
     @SuppressWarnings({"unchecked", "DataFlowIssue"})
-    <I extends Record> T getUnchecked(I instance) {
+    private <I extends Record> T getUnchecked(I instance) {
         try {
-            return (T) getter.invokeExact(targetClassGetter.get().cast(instance));
+            return (T) getter.invokeExact(instance); // I don't really like this, but Object != I, and there isn't much reflection can do to help with that
         } catch (Throwable throwable) {
             throw new RuntimeException(throwable);
         }
@@ -68,6 +70,7 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
         next.set(value);
     }
 
+    @SuppressWarnings("unused") // used in asm generated field initializers
     public T getNext() {
         var value = next.get();
         next.remove();
@@ -97,10 +100,10 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     @ApiStatus.Internal
     @SuppressWarnings("unused") // used in asm generated static initializers
     public void provideGetter(MethodHandle getter) {
-        this.getter = getter.asType(
+        this.getter = getter.asType(// currently seems the most efficient, looking into methods of acquiring constant promotion
                 MethodType.methodType(
-                        Object.class, // can return any object
-                        Object.class  // takes any object, not really, but we do the validation on that part ourselves, as I can't figure out how to cast to I
+                        Object.class,
+                        Object.class
                 )
         );
 

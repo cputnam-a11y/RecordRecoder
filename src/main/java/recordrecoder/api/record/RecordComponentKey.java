@@ -9,20 +9,20 @@ import java.util.function.Supplier;
 
 @ApiStatus.NonExtendable
 public interface RecordComponentKey<T> {
-    <I extends Record> T get(I instance) throws KeyMismatchException;
+    <I extends Record> T get(I instance) throws KeyMismatchException, IllegalStateException;
 
-    default <V extends Record> @Nullable T getOrNull(V instance) {
+    default <I extends Record> @Nullable T getOrNull(I instance) {
         try {
             return this.get(instance);
-        } catch (KeyMismatchException e) {
+        } catch (KeyMismatchException | NullPointerException e) {
             return null;
         }
     }
 
-    default <V extends Record> Optional<T> getOptional(V instance) {
+    default <I extends Record> Optional<T> getOptional(I instance) {
         try {
             return Optional.ofNullable(this.get(instance));
-        } catch (KeyMismatchException e) {
+        } catch (KeyMismatchException | NullPointerException e) {
             return Optional.empty();
         }
     }
@@ -49,7 +49,7 @@ public interface RecordComponentKey<T> {
         return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClassName, () -> defaultValue);
     }
 
-    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T>  componentClassName, Supplier<T> defaultValueSupplier) {
+    static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, Class<T> componentClassName, Supplier<T> defaultValueSupplier) {
         return new RecordComponentKeyImpl<>(fieldName, targetClassName, componentClassName, defaultValueSupplier::get);
     }
 

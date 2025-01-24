@@ -6,23 +6,33 @@ import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
-import org.spongepowered.asm.mixin.MixinEnvironment;
-import org.spongepowered.asm.mixin.transformer.ext.IExtension;
 import org.spongepowered.asm.mixin.transformer.ext.ITargetClassContext;
 import org.spongepowered.asm.util.Bytecode;
 import recordrecoder.api.record.ComponentKeyRegistry;
 import recordrecoder.impl.record.ComponentKeyRegistryImpl;
 import recordrecoder.impl.record.RecordComponentKeyImpl;
+import recordrecoder.impl.utils.Constants;
+import recordrecoder.impl.utils.asmhelpers.BytecodeHelper;
+import recordrecoder.impl.utils.asmhelpers.MethodNameTypeTuple;
+import recordrecoder.impl.utils.mixindefaults.IDefaultedExtension;
 
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-public class RecordClassTransformer implements IExtension {
-    public static final String RECORD_INTERNAL_NAME = "java/lang/Record";
+public class RecordClassTransformer implements IDefaultedExtension {
+
+    @Override
+    public void preApply(final ITargetClassContext context) {
+        ClassNode classNode = context.getClassNode();
+        if (!classNode.superName.equals(Constants.RECORD.getInternalName())) {
+            return;
+        }
+        transform(classNode);
+    }
 
     public static void transform(ClassNode classNode) {
-        if (!classNode.superName.equals(RECORD_INTERNAL_NAME)) {
+        if (!classNode.superName.equals(Constants.RECORD.getInternalName())) {
             return;
         }
         final ComponentKeyRegistryImpl impl = (ComponentKeyRegistryImpl) ComponentKeyRegistry.INSTANCE;
@@ -36,42 +46,39 @@ public class RecordClassTransformer implements IExtension {
         final InvokeDynamicInsnNode indyHashCode;
         final InvokeDynamicInsnNode indyEquals;
         {
-            final MethodNode toStringNode = Bytecode.findMethod(classNode, "toString", "()Ljava/lang/String;");
-            final MethodNode hashCodeNode = Bytecode.findMethod(classNode, "hashCode", "()I");
-            final MethodNode equalsNode = Bytecode.findMethod(classNode, "equals", "(Ljava/lang/Object;)Z");
-            staticInitializer = Bytecode.findMethod(classNode, "<clinit>", "()V");
+            final Optional<MethodNode> toStringNode = BytecodeHelper.findMethod(classNode, Constants.RECORD$TO_STRING);
+            final MethodNode hashCodeNode = Bytecode.findMethod(classNode, "hashCode", Type.getMethodType(Type.INT_TYPE).getDescriptor());
+            final MethodNode equalsNode = Bytecode.findMethod(classNode, "equals", Type.getMethodType(Type.BOOLEAN_TYPE, Constants.OBJECT).getDescriptor());
+            staticInitializer = BytecodeHelper.findMethod(classNode, Constants.CLINIT).orElse(null);
             for (MethodNode node : classNode.methods) {
                 if (node.name.equals("<init>")) {
                     if (Arrays.equals(Type.getArgumentTypes(node.desc), types))
                         canonicalConstructor = node;
                 }
             }
-            indyToString = map(
-                    toStringNode,
-                    node -> findIndy(
-                            node.instructions,
-                            "toString",
-                            "(L" + classNode.name + ";)Ljava/lang/String;"
-                    ).orElse(null)
-            );
+            indyToString = toStringNode.flatMap(
+                            node -> findIndy(
+                                    node.instructions,
+                                    Constants.TO_STRING_INDY.apply(classNode.name)
+                            )
+                    )
+                    .orElse(null);
             indyHashCode = map(
                     hashCodeNode,
                     node -> findIndy(
                             node.instructions,
-                            "hashCode",
-                            "(L" + classNode.name + ";)I"
+                            Constants.HASH_CODE_INDY.apply(classNode.name)
                     ).orElse(null)
             );
             indyEquals = map(
                     equalsNode,
                     node -> findIndy(
                             node.instructions,
-                            "equals",
-                            "(L" + classNode.name + ";Ljava/lang/Object;)Z"
+                            Constants.EQUALS_INDY.apply(classNode.name)
                     ).orElse(null)
             );
         }
-        if (indyEquals == null || indyHashCode == null || indyToString == null || staticInitializer == null || canonicalConstructor == null) {
+        if (staticInitializer == null || canonicalConstructor == null) {
             return;
         }
         List<String> keyFieldNames = new ArrayList<>();
@@ -87,8 +94,8 @@ public class RecordClassTransformer implements IExtension {
                     new FieldNode(
                             Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL,
                             keyFieldName,
-                            "Lrecordrecoder/impl/record/RecordComponentKeyImpl;",
-                            "Lrecordrecoder/impl/record/RecordComponentKeyImpl;",
+                            Constants.RECORD_COMPONENT_KEY_IMPL.getDescriptor(),
+                            Constants.RECORD_COMPONENT_KEY_IMPL.getDescriptor(),
                             null
                     )
             );
@@ -106,9 +113,12 @@ public class RecordClassTransformer implements IExtension {
                     canonicalConstructor.instructions.insertBefore(returnNode.get(), fieldInitializer);
                 }
             }
-            implementRecordMethod(indyToString, key, classNode.name, fieldName);
-            implementRecordMethod(indyHashCode, key, classNode.name, fieldName);
-            implementRecordMethod(indyEquals, key, classNode.name, fieldName);
+            if (indyToString != null)
+                implementRecordMethod(indyToString, key, classNode.name, fieldName);
+            if (indyHashCode != null)
+                implementRecordMethod(indyHashCode, key, classNode.name, fieldName);
+            if (indyEquals != null)
+                implementRecordMethod(indyEquals, key, classNode.name, fieldName);
             MethodNode getter = new MethodNode(
                     Opcodes.ACC_PUBLIC,
                     fieldName,
@@ -117,7 +127,7 @@ public class RecordClassTransformer implements IExtension {
                     new String[]{}
             );
             getter.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
-            getter.instructions.add(new FieldInsnNode(Opcodes.GETFIELD, classNode.name, fieldName, "Ljava/lang/Object;"));
+            getter.instructions.add(new FieldInsnNode(Opcodes.GETFIELD, classNode.name, fieldName, Constants.OBJECT.getDescriptor()));
             getter.instructions.add(new InsnNode(Opcodes.ARETURN));
             classNode.methods.add(getter);
         }
@@ -125,8 +135,11 @@ public class RecordClassTransformer implements IExtension {
             return;
         String newDesc = appendArguments(canonicalConstructor.desc, keys.size());
         String newSignature = appendArguments(canonicalConstructor.signature, keys.size());
+        int access = canonicalConstructor.access;
+        // as the components are in order, this cannot be varargs because the array param is not last
+        access = access & ~Opcodes.ACC_VARARGS;
         final MethodNode newCanonicalConstructor = new MethodNode(
-                Opcodes.ACC_PUBLIC,
+                access,
                 "<init>",
                 newDesc,
                 newSignature,
@@ -136,7 +149,7 @@ public class RecordClassTransformer implements IExtension {
         for (String name : keyFieldNames) {
             newCanonicalConstructor.visitFieldInsn(Opcodes.GETSTATIC, classNode.name, name, "Lrecordrecoder/impl/record/RecordComponentKeyImpl;");
             newCanonicalConstructor.visitVarInsn(Opcodes.ALOAD, offset++);
-            newCanonicalConstructor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "recordrecoder/impl/record/RecordComponentKeyImpl", "queueNext", "(Ljava/lang/Object;)V", false);
+            newCanonicalConstructor.instructions.add(Constants.RECORD_COMPONENT_KEY_IMPL$QUEUE_NEXT.call());
         }
         Type[] types1 = Type.getArgumentTypes(canonicalConstructor.desc);
         newCanonicalConstructor.visitVarInsn(Opcodes.ALOAD, 0);
@@ -163,8 +176,8 @@ public class RecordClassTransformer implements IExtension {
     private static void addComponent(final List<FieldNode> fields, final List<RecordComponentNode> components, final String fieldName, String facingName) {
         var component = new RecordComponentNode(
                 fieldName,
-                "Ljava/lang/Object;",
-                "Ljava/lang/Object;"
+                Constants.OBJECT.getDescriptor(),
+                Constants.OBJECT.getDescriptor()
         );
         if (component.visibleAnnotations == null)
             component.visibleAnnotations = new ArrayList<>();
@@ -173,52 +186,58 @@ public class RecordClassTransformer implements IExtension {
         component.visibleAnnotations.add(facingNameNode);
 
         components.add(component);
-        fields.add(new FieldNode(
-                Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL,
-                fieldName,
-                "Ljava/lang/Object;",
-                "Ljava/lang/Object;",
-                null
-        ));
+        fields.add(
+                new FieldNode(
+                        Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL,
+                        fieldName,
+                        Constants.OBJECT.getDescriptor(),
+                        Constants.OBJECT.getDescriptor(),
+                        null
+                )
+        );
     }
 
     private static InsnList generateKeyFieldInitializer(final String recordClassName, final String keyFieldName, final String fieldName) {
         InsnList keyFieldInitializer = new InsnList();
-        keyFieldInitializer.add(new FieldInsnNode(Opcodes.GETSTATIC, "recordrecoder/api/record/ComponentKeyRegistry", "INSTANCE", "Lrecordrecoder/api/record/ComponentKeyRegistry;"));
-        keyFieldInitializer.add(new TypeInsnNode(Opcodes.CHECKCAST, "recordrecoder/impl/record/ComponentKeyRegistryImpl"));
+        keyFieldInitializer.add(Constants.COMPONENT_KEY_REGISTRY$INSTANCE.get());
+        keyFieldInitializer.add(new TypeInsnNode(Opcodes.CHECKCAST, Constants.COMPONENT_KEY_REGISTRY_IMPL.getInternalName()));
         keyFieldInitializer.add(new LdcInsnNode(fieldName));
-        keyFieldInitializer.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "recordrecoder/impl/record/ComponentKeyRegistryImpl", "getKeyForName", "(Ljava/lang/String;)Lrecordrecoder/impl/record/RecordComponentKeyImpl;", false));
-        keyFieldInitializer.add(new TypeInsnNode(Opcodes.CHECKCAST, "recordrecoder/impl/record/RecordComponentKeyImpl"));
+        keyFieldInitializer.add(Constants.COMPONENT_KEY_REGISTRY_IMPL$GET_KEY_FOR_NAME.call());
+        keyFieldInitializer.add(
+                new TypeInsnNode(
+                        Opcodes.CHECKCAST,
+                        Constants.RECORD_COMPONENT_KEY_IMPL.getInternalName()
+                )
+        );
         keyFieldInitializer.add(new InsnNode(Opcodes.DUP));
-        keyFieldInitializer.add(new FieldInsnNode(Opcodes.PUTSTATIC, recordClassName, keyFieldName, "Lrecordrecoder/impl/record/RecordComponentKeyImpl;"));
+        keyFieldInitializer.add(
+                new FieldInsnNode(
+                        Opcodes.PUTSTATIC,
+                        recordClassName,
+                        keyFieldName,
+                        Constants.RECORD_COMPONENT_KEY_IMPL.getDescriptor()
+                )
+        );
         keyFieldInitializer.add(
                 new LdcInsnNode(
                         new Handle(
                                 Opcodes.H_GETFIELD,
                                 recordClassName,
                                 fieldName,
-                                "Ljava/lang/Object;",
+                                Constants.OBJECT.getDescriptor(),
                                 false
                         )
                 )
         );
-        keyFieldInitializer.add(
-                new MethodInsnNode(
-                        Opcodes.INVOKEVIRTUAL,
-                        "recordrecoder/impl/record/RecordComponentKeyImpl",
-                        "provideGetter",
-                        "(Ljava/lang/invoke/MethodHandle;)V",
-                        false
-                )
-        );
+        keyFieldInitializer.add(Constants.RECORD_COMPONENT_KEY_IMPL$PROVIDE_GETTER.call());
         return keyFieldInitializer;
     }
 
     private static InsnList generateFieldInitializer(final String recordClassName, final String keyFieldName, final String fieldName) {
         InsnList fieldInitializer = new InsnList();
         fieldInitializer.add(new VarInsnNode(Opcodes.ALOAD, 0));
-        fieldInitializer.add(new FieldInsnNode(Opcodes.GETSTATIC, recordClassName, keyFieldName, "Lrecordrecoder/impl/record/RecordComponentKeyImpl;"));
-        fieldInitializer.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "recordrecoder/impl/record/RecordComponentKeyImpl", "getNext", "()Ljava/lang/Object;", false));
+        fieldInitializer.add(new FieldInsnNode(Opcodes.GETSTATIC, recordClassName, keyFieldName, Constants.RECORD_COMPONENT_KEY_IMPL.getDescriptor()));
+        fieldInitializer.add(Constants.RECORD_COMPONENT_KEY_IMPL$GET_NEXT.call());
         fieldInitializer.add(new FieldInsnNode(Opcodes.PUTFIELD, recordClassName, fieldName, "Ljava/lang/Object;"));
         return fieldInitializer;
     }
@@ -247,9 +266,9 @@ public class RecordClassTransformer implements IExtension {
         return Optional.empty();
     }
 
-    private static Optional<InvokeDynamicInsnNode> findIndy(final InsnList insns, final String name, final String desc) {
+    private static Optional<InvokeDynamicInsnNode> findIndy(final InsnList insns, MethodNameTypeTuple nameAndType) {
         for (AbstractInsnNode node : insns) {
-            if (node instanceof InvokeDynamicInsnNode indy && name.equals(indy.name) && desc.equals(indy.desc)) {
+            if (node instanceof InvokeDynamicInsnNode indy && nameAndType.name().equals(indy.name) && nameAndType.type().getDescriptor().equals(indy.desc)) {
                 return Optional.of(indy);
             }
         }
@@ -260,29 +279,6 @@ public class RecordClassTransformer implements IExtension {
         return v == null
                ? null
                : mapper.apply(v);
-    }
-
-    @Override
-    public boolean checkActive(final MixinEnvironment environment) {
-        return true;
-    }
-
-    @Override
-    public void preApply(final ITargetClassContext context) {
-    }
-
-    @Override
-    public void postApply(final ITargetClassContext context) {
-        ClassNode classNode = context.getClassNode();
-        if (!classNode.superName.equals("java/lang/Record")) {
-            return;
-        }
-        transform(classNode);
-    }
-
-    @Override
-    public void export(final MixinEnvironment env, final String name, final boolean force, final ClassNode classNode) {
-
     }
 
     private static String appendArguments(String desc, int numAdditional) {
