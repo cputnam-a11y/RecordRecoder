@@ -5,14 +5,12 @@
   "name": "RecordRecoder",
   "description": "An asm tool facilitating the easy and typesafe addition of fields to records",
   "authors": [
-    "cputnam-a11y"
+    "cputnam-a11y",
+    "zOnlyKroks"
   ],
   "license": "MIT",
   "icon": "assets/recordrecoder/icon.png",
   "environment": "*",
-  "mixins": [
-    "recordrecoder.mixins.json"
-  ],
   "depends": {
     "fabricloader": ">=0.16.10"
   }

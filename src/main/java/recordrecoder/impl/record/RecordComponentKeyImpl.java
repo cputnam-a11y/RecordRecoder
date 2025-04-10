@@ -5,6 +5,8 @@ import com.google.common.base.Suppliers;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import recordrecoder.api.record.RecordComponentKey;
+import recordrecoder.impl.RecordRecoder;
+
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.util.Objects;
@@ -23,6 +25,8 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     MethodHandle getter;
 
     public RecordComponentKeyImpl(String fieldName, String targetClassName, String componentClassName, Supplier<T> defaultValueSupplier) {
+        targetClassName = sanitizeFieldName(targetClassName);
+
         this.targetClassName = targetClassName;
         this.componentClassName = componentClassName;
         this.targetClassGetter = Suppliers.memoize(createTargetClassSupplier(targetClassName));
@@ -32,6 +36,8 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
     }
 
     public RecordComponentKeyImpl(String fieldName, String targetClassName, Class<?> componentClass, Supplier<T> defaultValueSupplier) {
+        targetClassName = sanitizeFieldName(targetClassName);
+
         this.targetClassName = targetClassName;
         this.componentClassName = toInternalName(componentClass.getName());
         this.targetClassGetter = Suppliers.memoize(createTargetClassSupplier(targetClassName));
@@ -40,6 +46,15 @@ public final class RecordComponentKeyImpl<T> implements RecordComponentKey<T> {
         this.fieldName = fieldName;
     }
 
+    private String sanitizeFieldName(String str) {
+        //Sanitize targetClassName from . to internal / , warn if this has to be done!
+        if (str.contains(".")) {
+            RecordRecoder.LOGGER.warn("Target class name {} contains '.', replacing with '/'", str);
+            RecordRecoder.LOGGER.warn("Whilst this is not a problem (and solved by us, thank us later xD), it is recommended to use the internal name of the class instead!");
+            str = str.replace(".", "/");
+        }
+        return str;
+    }
 
     @Override
     public <I extends Record> T get(I instance) throws KeyMismatchException, IllegalStateException {

@@ -14,31 +14,8 @@ public record OwnedField(Type owner, String name, Type descriptor, boolean isSta
         Objects.requireNonNull(descriptor, "Descriptor cannot be null");
     }
 
-    /**
-     *
-     * @param owner the internal name of the class that owns the field
-     * @param name the name of the field
-     * @param descriptor the descriptor of the field
-     * @param isStatic whether the field is static
-     */
-    public OwnedField(String owner, String name, String descriptor, boolean isStatic) {
-        this(Type.getObjectType(owner), name, Type.getType(descriptor), isStatic);
-    }
-
     public String toString() {
         return owner.getInternalName() + "." + name + descriptor;
-    }
-
-    public String getOwnerDescriptor() {
-        return owner.getDescriptor();
-    }
-
-    public String getOwnerInternalName() {
-        return owner.getInternalName();
-    }
-
-    public String getOwnerBinaryName() {
-        return owner.getClassName();
     }
 
     public int opcode(boolean get) {

@@ -1,12 +1,12 @@
 {
   "required": true,
-  "package": "recordrecoder.impl.mixin",
+  "package": "recordrecoder.test.mixin",
   "compatibilityLevel": "JAVA_21",
   "injectors": {
     "defaultRequire": 1
   },
   "plugin": "recordrecoder.impl.RecordRecoder",
   "mixins": [
-    "TagFileMixin"
+    "DamageRecordMixin"
   ]
 }
