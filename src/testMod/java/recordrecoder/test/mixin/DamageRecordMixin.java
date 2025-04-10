@@ -1,4 +1,4 @@
-package recordrecoder.impl.mixin;
+package recordrecoder.test.mixin;
 
 import net.minecraft.entity.damage.DamageRecord;
 import net.minecraft.registry.tag.TagFile;

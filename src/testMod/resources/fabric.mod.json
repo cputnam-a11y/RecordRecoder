@@ -9,5 +9,8 @@
     "main": [
       "recordrecoder.test.RecordRecoderTestInitializer"
     ]
-  }
+  },
+  "mixins": [
+    "recordrecoder.mixins.json"
+  ]
 }
