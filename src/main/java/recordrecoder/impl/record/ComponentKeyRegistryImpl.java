@@ -13,9 +13,9 @@ import java.util.List;
 import static recordrecoder.impl.utils.asmhelpers.ClassNameHelper.toInternalName;
 
 public class ComponentKeyRegistryImpl implements ComponentKeyRegistry {
-    HashMap<String, List<RecordComponentKeyImpl<?>>> componentKeys = new HashMap<>();
+    final HashMap<String, List<RecordComponentKeyImpl<?>>> componentKeys = new HashMap<>();
 
-    HashBiMap<RecordComponentKeyImpl<?>, String> componentKeyNames = HashBiMap.create();
+    final HashBiMap<RecordComponentKeyImpl<?>, String> componentKeyNames = HashBiMap.create();
 
     @SuppressWarnings("unchecked")
     @Override
