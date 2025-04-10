@@ -7,4 +7,6 @@ import org.spongepowered.asm.mixin.Mixin;
 
 @Mixin(DamageRecord.class)
 @Debug(export = true)
-public class DamageRecordMixin {}
+public class DamageRecordMixin {
+
+}
