@@ -18,7 +18,6 @@ import java.util.Objects;
 import static recordrecoder.impl.utils.asmhelpers.ClassNameHelper.*;
 
 public class RecordRecoderTestInitializer implements ModInitializer {
-    public static final Logger LOGGER = LoggerFactory.getLogger("recordrecoder-test");
 
     @Override
     public void onInitialize() {
