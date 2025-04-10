@@ -4,15 +4,17 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongepowered.asm.logging.ILogger;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
 import org.spongepowered.asm.mixin.transformer.ext.Extensions;
+import org.spongepowered.asm.service.MixinService;
 import recordrecoder.impl.asm.RecordClassTransformer;
 import recordrecoder.impl.utils.Constants;
 import recordrecoder.impl.utils.mixindefaults.IDefaultedMixinConfigPlugin;
 
 public class RecordRecoder implements IDefaultedMixinConfigPlugin {
-    public static final Logger LOGGER = LoggerFactory.getLogger("recordrecoder-impl");
+    public static final ILogger LOGGER = MixinService.getService().getLogger("recordrecoder-impl");
 
     @Override
     public void onLoad(String mixinPackage) {
