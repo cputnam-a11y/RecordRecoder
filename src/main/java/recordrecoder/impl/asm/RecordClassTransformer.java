@@ -9,6 +9,7 @@ import org.objectweb.asm.tree.*;
 import org.spongepowered.asm.mixin.transformer.ext.ITargetClassContext;
 import org.spongepowered.asm.util.Bytecode;
 import recordrecoder.api.record.ComponentKeyRegistry;
+import recordrecoder.impl.RecordRecoder;
 import recordrecoder.impl.record.ComponentKeyRegistryImpl;
 import recordrecoder.impl.record.RecordComponentKeyImpl;
 import recordrecoder.impl.utils.Constants;
@@ -32,55 +33,68 @@ public class RecordClassTransformer implements IDefaultedExtension {
     }
 
     public static void transform(ClassNode classNode) {
+        // Early return if not a Record class
         if (!classNode.superName.equals(Constants.RECORD.getInternalName())) {
+            RecordRecoder.LOGGER.warn("Class {} is not a record class, skipping transformation.", classNode.name);
             return;
         }
+
         final ComponentKeyRegistryImpl impl = (ComponentKeyRegistryImpl) ComponentKeyRegistry.INSTANCE;
         List<RecordComponentKeyImpl<?>> keys = impl.getForClass(classNode.name);
         if (keys.isEmpty())
             return;
-        final MethodNode staticInitializer;
+
+        // Get record component types
+        final Type[] types = classNode.recordComponents.stream()
+                .map(node -> node.descriptor)
+                .map(Type::getType)
+                .toArray(Type[]::new);
+
+        // Find necessary methods
         MethodNode canonicalConstructor = null;
-        final Type[] types = classNode.recordComponents.stream().map(node -> node.descriptor).map(Type::getType).toArray(Type[]::new);
-        final InvokeDynamicInsnNode indyToString;
-        final InvokeDynamicInsnNode indyHashCode;
-        final InvokeDynamicInsnNode indyEquals;
-        {
-            final Optional<MethodNode> toStringNode = BytecodeHelper.findMethod(classNode, Constants.RECORD$TO_STRING);
-            final MethodNode hashCodeNode = Bytecode.findMethod(classNode, "hashCode", Type.getMethodType(Type.INT_TYPE).getDescriptor());
-            final MethodNode equalsNode = Bytecode.findMethod(classNode, "equals", Type.getMethodType(Type.BOOLEAN_TYPE, Constants.OBJECT).getDescriptor());
-            staticInitializer = BytecodeHelper.findMethod(classNode, Constants.CLINIT).orElse(null);
-            for (MethodNode node : classNode.methods) {
-                if (node.name.equals("<init>")) {
-                    if (Arrays.equals(Type.getArgumentTypes(node.desc), types))
-                        canonicalConstructor = node;
-                }
+        for (MethodNode node : classNode.methods) {
+            if (node.name.equals("<init>") && Arrays.equals(Type.getArgumentTypes(node.desc), types)) {
+                canonicalConstructor = node;
+                break;
             }
-            indyToString = toStringNode.flatMap(
-                            node -> findIndy(
-                                    node.instructions,
-                                    Constants.TO_STRING_INDY.apply(classNode.name)
-                            )
-                    )
-                    .orElse(null);
-            indyHashCode = map(
-                    hashCodeNode,
-                    node -> findIndy(
-                            node.instructions,
-                            Constants.HASH_CODE_INDY.apply(classNode.name)
-                    ).orElse(null)
-            );
-            indyEquals = map(
-                    equalsNode,
-                    node -> findIndy(
-                            node.instructions,
-                            Constants.EQUALS_INDY.apply(classNode.name)
-                    ).orElse(null)
-            );
         }
-        if (staticInitializer == null || canonicalConstructor == null) {
+
+        // If no canonical constructor was found, we can't proceed
+        if (canonicalConstructor == null) {
+            RecordRecoder.LOGGER.warn("Can't find constructor for {}", classNode.name);
             return;
         }
+
+        // If the constructor descriptor or signature is null, rebuild them dynamically.
+        if (canonicalConstructor.desc == null) {
+            canonicalConstructor.desc = Type.getMethodDescriptor(Type.VOID_TYPE, types);
+        }
+
+        if (canonicalConstructor.signature == null) {
+            canonicalConstructor.signature = canonicalConstructor.desc;
+        }
+
+        final MethodNode staticInitializer = ensureStaticInitializer(classNode);
+
+        // Find intrinsic methods and their InvokeDynamic nodes
+        final Optional<MethodNode> toStringNode = BytecodeHelper.findMethod(classNode, Constants.RECORD$TO_STRING);
+        final MethodNode hashCodeNode = Bytecode.findMethod(classNode, "hashCode", Type.getMethodType(Type.INT_TYPE).getDescriptor());
+        final MethodNode equalsNode = Bytecode.findMethod(classNode, "equals", Type.getMethodType(Type.BOOLEAN_TYPE, Constants.OBJECT).getDescriptor());
+
+        final InvokeDynamicInsnNode indyToString = toStringNode.flatMap(
+                node -> findIndy(node.instructions, Constants.TO_STRING_INDY.apply(classNode.name))
+        ).orElse(null);
+
+        final InvokeDynamicInsnNode indyHashCode = map(
+                hashCodeNode,
+                node -> findIndy(node.instructions, Constants.HASH_CODE_INDY.apply(classNode.name)).orElse(null)
+        );
+
+        final InvokeDynamicInsnNode indyEquals = map(
+                equalsNode,
+                node -> findIndy(node.instructions, Constants.EQUALS_INDY.apply(classNode.name)).orElse(null)
+        );
+
         List<String> keyFieldNames = new ArrayList<>();
         for (final RecordComponentKeyImpl<?> key : keys) {
             final UUID uuid = UUID.randomUUID();
@@ -90,6 +104,7 @@ public class RecordClassTransformer implements IDefaultedExtension {
             impl.registerNameForKey(key, fieldName);
             RecordClassTransformer.addComponent(classNode, fieldName, key.getFieldName());
 
+            // Add static field for the key
             classNode.fields.add(
                     new FieldNode(
                             Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL,
@@ -99,26 +114,39 @@ public class RecordClassTransformer implements IDefaultedExtension {
                             null
                     )
             );
-            {
-                final var keyFieldInitializer = generateKeyFieldInitializer(classNode.name, keyFieldName, fieldName);
-                final var returnNode = RecordClassTransformer.findFromLast(staticInitializer.instructions, node -> node.getOpcode() == Opcodes.RETURN);
-                returnNode.ifPresent(
-                        r -> staticInitializer.instructions.insertBefore(r, keyFieldInitializer)
-                );
+
+            // Initialize the key field in static initializer
+            final var keyFieldInitializer = generateKeyFieldInitializer(classNode.name, keyFieldName, fieldName);
+            final var returnNode = RecordClassTransformer.findFromLast(staticInitializer.instructions, node -> node.getOpcode() == Opcodes.RETURN);
+            if (returnNode.isPresent()) {
+                staticInitializer.instructions.insertBefore(returnNode.get(), keyFieldInitializer);
+            } else {
+                // If no return instruction found, add to the end (before adding our own return)
+                staticInitializer.instructions.add(keyFieldInitializer);
             }
-            {
-                final var fieldInitializer = generateFieldInitializer(classNode.name, keyFieldName, fieldName);
-                var returnNode = RecordClassTransformer.findFromLast(canonicalConstructor.instructions, node -> node.getOpcode() == Opcodes.RETURN);
-                if (returnNode.isPresent()) {
-                    canonicalConstructor.instructions.insertBefore(returnNode.get(), fieldInitializer);
-                }
+
+            // Initialize the field in the constructor
+            final var fieldInitializer = generateFieldInitializer(classNode.name, keyFieldName, fieldName);
+            var constructorReturnNode = RecordClassTransformer.findFromLast(canonicalConstructor.instructions, node -> node.getOpcode() == Opcodes.RETURN);
+            if (constructorReturnNode.isPresent()) {
+                canonicalConstructor.instructions.insertBefore(constructorReturnNode.get(), fieldInitializer);
+            } else {
+                // If no return instruction found, add to the end (should never happen for a valid constructor)
+                RecordRecoder.LOGGER.warn("Constructor does not seems valid as it does not have a return instruction. Adding field initializer at the end.");
+
+                canonicalConstructor.instructions.add(fieldInitializer);
+                canonicalConstructor.instructions.add(new InsnNode(Opcodes.RETURN));
             }
+
+            // Implement Record methods if they exist
             if (indyToString != null)
                 implementRecordMethod(indyToString, key, classNode.name, fieldName);
             if (indyHashCode != null)
                 implementRecordMethod(indyHashCode, key, classNode.name, fieldName);
             if (indyEquals != null)
                 implementRecordMethod(indyEquals, key, classNode.name, fieldName);
+
+            // Add getter method
             MethodNode getter = new MethodNode(
                     Opcodes.ACC_PUBLIC,
                     fieldName,
@@ -131,13 +159,19 @@ public class RecordClassTransformer implements IDefaultedExtension {
             getter.instructions.add(new InsnNode(Opcodes.ARETURN));
             classNode.methods.add(getter);
         }
+
         if (keys.isEmpty())
             return;
+
+        RecordRecoder.LOGGER.info("Adding cannonical constructor for {} with {} keys", classNode.name, keys.size());
+
+        // Create new canonical constructor with additional parameters
         String newDesc = appendArguments(canonicalConstructor.desc, keys.size());
         String newSignature = appendArguments(canonicalConstructor.signature, keys.size());
         int access = canonicalConstructor.access;
-        // as the components are in order, this cannot be varargs because the array param is not last
+        // As the components are in order, this cannot be varargs because the array param is not last
         access = access & ~Opcodes.ACC_VARARGS;
+
         final MethodNode newCanonicalConstructor = new MethodNode(
                 access,
                 "<init>",
@@ -145,17 +179,20 @@ public class RecordClassTransformer implements IDefaultedExtension {
                 newSignature,
                 new String[]{}
         );
-        int offset = Type.getArgumentCount(canonicalConstructor.desc) + 1 /* +1 for this */;
+
+        int offset = Type.getArgumentCount(canonicalConstructor.desc) + 1; // +1 for this
         for (String name : keyFieldNames) {
             newCanonicalConstructor.visitFieldInsn(Opcodes.GETSTATIC, classNode.name, name, "Lrecordrecoder/impl/record/RecordComponentKeyImpl;");
             newCanonicalConstructor.visitVarInsn(Opcodes.ALOAD, offset++);
             newCanonicalConstructor.instructions.add(Constants.RECORD_COMPONENT_KEY_IMPL$QUEUE_NEXT.call());
         }
+
         Type[] types1 = Type.getArgumentTypes(canonicalConstructor.desc);
         newCanonicalConstructor.visitVarInsn(Opcodes.ALOAD, 0);
-        for (int i = 1;/* 1 for this */ i <= types1.length; i++) {
+        for (int i = 1; i <= types1.length; i++) { // 1 for this
             newCanonicalConstructor.visitVarInsn(getLoadOpcodeForType(types1[i - 1]), i);
         }
+
         newCanonicalConstructor.instructions.add(
                 new MethodInsnNode(
                         Opcodes.INVOKESPECIAL,
@@ -165,8 +202,34 @@ public class RecordClassTransformer implements IDefaultedExtension {
                         false
                 )
         );
+
         newCanonicalConstructor.visitInsn(Opcodes.RETURN);
         classNode.methods.addFirst(newCanonicalConstructor);
+        RecordRecoder.LOGGER.info("Transformation of {} complete", classNode.name);
+    }
+
+    private static MethodNode ensureStaticInitializer(ClassNode classNode) {
+        Optional<MethodNode> existingClinit = BytecodeHelper.findMethod(classNode, Constants.CLINIT);
+
+        if (existingClinit.isPresent()) {
+            return existingClinit.get();
+        }
+
+        RecordRecoder.LOGGER.info("Static initializer not found, creating one for {}", classNode.name);
+
+        MethodNode clinit = new MethodNode(
+                Opcodes.ACC_STATIC,
+                "<clinit>",
+                "()V",
+                null,
+                null
+        );
+
+        clinit.instructions.add(new InsnNode(Opcodes.RETURN));
+
+        classNode.methods.add(clinit);
+
+        return clinit;
     }
 
     private static void addComponent(final ClassNode targetClass, final String fieldName, String facingName) {

@@ -6,7 +6,7 @@ import recordrecoder.api.record.RecordComponentKey;
 public class RecordRecoderTest implements Runnable {
     public static final RecordComponentKey<String> KEY = RecordComponentKey.create(
             "addedField",
-            "net/minecraft/registry/tag/TagFile",
+            "net/minecraft/entity/damage/DamageRecord",
             String.class,
             "Hello, World!"
     );

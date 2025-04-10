@@ -7,6 +7,6 @@
   },
   "plugin": "recordrecoder.impl.RecordRecoder",
   "mixins": [
-    "TagFileMixin"
+    "DamageRecordMixin"
   ]
 }

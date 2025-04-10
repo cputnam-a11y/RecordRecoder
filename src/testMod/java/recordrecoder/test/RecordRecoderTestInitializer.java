@@ -1,6 +1,10 @@
 package recordrecoder.test;
 
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.entity.damage.DamageRecord;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageSources;
+import net.minecraft.entity.damage.FallLocation;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.TagFile;
 import net.minecraft.registry.tag.TagKey;
@@ -55,24 +59,24 @@ public class RecordRecoderTestInitializer implements ModInitializer {
                 "expected toDescriptor(\"java.lang.String\") to return \"Ljava/lang/String;\""
         );
         {
-            TagFile file = new TagFile(List.of(), false);
+            DamageRecord record = new DamageRecord(null, 0, FallLocation.GENERIC, 0);
             expect(
-                    Objects.equals(RecordRecoderTest.KEY.getOrNull(file), "Hello, World!"),
+                    Objects.equals(RecordRecoderTest.KEY.getOrNull(record), "Hello, World!"),
                     "expected RecordComponentKey#getOrNull on default value to return default value"
             );
         }
         {
             RecordRecoderTest.KEY.queueNext("Hullo, Wider World!");
-            TagFile file = new TagFile(List.of(), false);
+            DamageRecord record = new DamageRecord(null, 0, FallLocation.GENERIC, 0);
             expect(
-                    Objects.equals(RecordRecoderTest.KEY.getOrNull(file), "Hullo, Wider World!"),
+                    Objects.equals(RecordRecoderTest.KEY.getOrNull(record), "Hullo, Wider World!"),
                     "expected RecordComponentKey#getOrNull on queued value to return queued value"
             );
         }
         {
-            TagFile file = new TagFile(List.of(), false);
+            DamageRecord record = new DamageRecord(null, 0, FallLocation.GENERIC, 0);
             expect(
-                    Objects.equals(RecordRecoderTest.KEY.getOrNull(file), "Hello, World!"),
+                    Objects.equals(RecordRecoderTest.KEY.getOrNull(record), "Hello, World!"),
                     "expected RecordComponentKey#getOrNull to return default value again after constructor clears value"
             );
         }
