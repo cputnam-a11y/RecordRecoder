@@ -11,9 +11,6 @@
   "license": "MIT",
   "icon": "assets/recordrecoder/icon.png",
   "environment": "*",
-  "mixins": [
-    "recordrecoder.mixins.json"
-  ],
   "depends": {
     "fabricloader": ">=0.16.10"
   }
