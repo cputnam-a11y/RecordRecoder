@@ -31,6 +31,7 @@ public class RecordRecoder implements IDefaultedMixinConfigPlugin {
         IMixinTransformer transformer = (IMixinTransformer) environment.getActiveTransformer();
         Extensions extensions = (Extensions) transformer.getExtensions();
         extensions.add(new RecordClassTransformer());
+
         LOGGER.info("Patented record recoding system (PRRS) initialized!");
     }
 }

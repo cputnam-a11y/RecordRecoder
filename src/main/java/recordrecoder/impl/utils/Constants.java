@@ -18,7 +18,6 @@ public interface Constants {
     Type STRING = Type.getType(String.class);
     Type METHOD_HANDLE = Type.getType(MethodHandle.class);
     Type VOID = Type.getType("V");
-    Type RECORD_COMPONENT_KEY = Type.getType(RecordComponentKeyImpl.class);
     Type RECORD_COMPONENT_KEY_IMPL = Type.getType(RecordComponentKeyImpl.class);
     Type COMPONENT_KEY_REGISTRY = Type.getType(ComponentKeyRegistry.class);
     Type COMPONENT_KEY_REGISTRY_IMPL = Type.getType(ComponentKeyRegistryImpl.class);
