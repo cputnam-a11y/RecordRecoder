@@ -8,7 +8,18 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 @ApiStatus.NonExtendable
+@SuppressWarnings("unused")
 public interface RecordComponentKey<T> {
+    /**
+     * Retrieves the component value from a record instance.
+     *
+     * @param <I>      The record instance type
+     * @param instance The record instance from which to get the component value
+     * @return The component value
+     * @throws KeyMismatchException  If the key is not applicable to the provided instance type
+     * @throws IllegalStateException If the getter has not been provided yet
+     * @throws NullPointerException  If the instance is null
+     */
     <I extends Record> T get(I instance) throws KeyMismatchException, IllegalStateException;
 
     default <I extends Record> @Nullable T getOrNull(I instance) {
@@ -27,6 +38,13 @@ public interface RecordComponentKey<T> {
         }
     }
 
+    /**
+     * Queues a value to be assigned to this component during the next record instantiation.
+     * The value is stored in a ThreadLocal to ensure thread safety.
+     *
+     * @param value The value to queue
+     * @throws IllegalArgumentException If the value is not of the expected component type
+     */
     void queueNext(T value);
 
     static <T> RecordComponentKey<T> create(String fieldName, String targetClassName, String componentClassName) {
